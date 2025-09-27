@@ -12,7 +12,7 @@ import taskRouter from './controller/task.controller';
 import { AppDataSource } from './config/database';
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 4000;
 
 morgan.token('date', () => {
   return new Date().toISOString();
@@ -22,7 +22,7 @@ morgan.token('date', () => {
 const whitelistHostnames = [
   // apex hosts you trust
   'multi-tenant-frontend-opal.vercel.app',
-  'localhost:3000',
+  'localhost',
 ];
 
 export const corsOptions: CorsOptions = {
@@ -49,6 +49,7 @@ export const corsOptions: CorsOptions = {
   credentials: true, // if you use cookies/Authorization
   methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
   allowedHeaders: ['Content-Type','Authorization','X-Requested-With'],
+  exposedHeaders: ['Access-Control-Allow-Origin'],
 };
 
 
