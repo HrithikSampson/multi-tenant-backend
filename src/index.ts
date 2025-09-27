@@ -21,6 +21,7 @@ morgan.token('date', () => {
 
 const whitelistHostnames = [
   // apex hosts you trust
+  'multitenant-frontend-15a490s74-hrithiks-projects-a05d4764.vercel.app',
   'multi-tenant-frontend-opal.vercel.app',
   'http://localhost:3000',
 ];
