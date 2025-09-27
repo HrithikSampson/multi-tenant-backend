@@ -56,9 +56,7 @@ app.use(
   morgan(':date[iso] :method :url :status :response-time ms - :res[content-length]')
 );
 
-app.use(cors({
-    origin: '*',
-}));
+app.use(cors(corsOptions));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
