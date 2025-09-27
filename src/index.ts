@@ -50,8 +50,15 @@ app.use(
 // CORS middleware first
 app.use(cors(corsOptions));
 
-// 🔑 This is the important part for preflight
-app.options('*', cors(corsOptions));
+app.options('*', (req, res) => {
+  // mirror cors options in case the above didn't run
+  res.setHeader('Access-Control-Allow-Origin', 'https://multi-tenant-frontend-opal.vercel.app');
+  res.setHeader('Vary', 'Origin');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With');
+  return res.status(204).end();
+});
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
