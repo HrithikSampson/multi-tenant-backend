@@ -35,7 +35,7 @@ const corsOptions: CorsOptions = {
 
 app.use(morgan(':date[iso] :method :url :status :response-time ms - :res[content-length]'));
 app.use(cors(corsOptions));
-app.options('*', (req, res) => {
+app.options('/*', (req, res) => {
   // unconditional preflight response (bullet-proof)
   const origin = req.headers.origin as string | undefined;
   if (origin) res.setHeader('Access-Control-Allow-Origin', origin);
