@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import express from 'express';
-import cors from 'cors';
+import cors, { CorsOptions } from 'cors';
 import morgan from 'morgan';
 import authRouter from './controller/auth.controller';
 import organizationRouter from './controller/organization.controller';
@@ -17,6 +17,40 @@ const PORT = process.env.PORT || 3000;
 morgan.token('date', () => {
   return new Date().toISOString();
 });
+
+
+const whitelistHostnames = [
+  // apex hosts you trust
+  'multi-tenant-frontend-opal.vercel.app',
+  'http://localhost:3000',
+];
+
+export const corsOptions: CorsOptions = {
+  origin(origin, callback) {
+    // allow non-browser (no Origin) like curl/cron/health checks
+    if (!origin) return callback(null, true);
+
+    // robust parse
+    let hostname: string;
+    try {
+      hostname = new URL(origin).hostname; // e.g. foo.bar.com
+    } catch {
+      return callback(new Error('Invalid Origin'));
+    }
+
+    // allow apex or any subdomain of items in whitelistHostnames
+    const allowed = whitelistHostnames.some((allowedHost) =>
+      hostname === allowedHost || hostname.endsWith(`.${allowedHost}`)
+    );
+
+    if (allowed) return callback(null, true);
+    return callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true, // if you use cookies/Authorization
+  methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
+  allowedHeaders: ['Content-Type','Authorization','X-Requested-With'],
+};
+
 
 app.use(
   morgan(':date[iso] :method :url :status :response-time ms - :res[content-length]')
