@@ -14,64 +14,55 @@ import { AppDataSource } from './config/database';
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-morgan.token('date', () => {
-  return new Date().toISOString();
-});
-
+morgan.token('date', () => new Date().toISOString());
 
 const whitelistHostnames = [
-  // apex hosts you trust
   'multi-tenant-frontend-opal.vercel.app',
   'localhost',
 ];
 
 export const corsOptions: CorsOptions = {
   origin(origin, callback) {
-    // allow non-browser (no Origin) like curl/cron/health checks
     if (!origin) return callback(null, true);
-
-    // robust parse
     let hostname: string;
     try {
-      hostname = new URL(origin).hostname; // e.g. foo.bar.com
+      hostname = new URL(origin).hostname;
     } catch {
       return callback(new Error('Invalid Origin'));
     }
-
-    // allow apex or any subdomain of items in whitelistHostnames
-    const allowed = whitelistHostnames.some((allowedHost) =>
-      hostname === allowedHost || hostname.endsWith(`.${allowedHost}`)
+    const allowed = whitelistHostnames.some(
+      (allowedHost) =>
+        hostname === allowedHost || hostname.endsWith(`.${allowedHost}`)
     );
-
-    if (allowed) return callback(null, true);
-    return callback(new Error('Not allowed by CORS'));
+    allowed ? callback(null, true) : callback(new Error('Not allowed by CORS'));
   },
-  credentials: true, // if you use cookies/Authorization
-  methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
-  allowedHeaders: ['Content-Type','Authorization','X-Requested-With'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   exposedHeaders: ['Access-Control-Allow-Origin'],
 };
 
-
+// logging first
 app.use(
   morgan(':date[iso] :method :url :status :response-time ms - :res[content-length]')
 );
 
+// CORS middleware first
 app.use(cors(corsOptions));
+
+// 🔑 This is the important part for preflight
+app.options('*', cors(corsOptions));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// API Routes
+// API routes
 app.use('/api/auth', authRouter);
 app.use('/api/organizations', organizationRouter);
 app.use('/api/projects', projectRouter);
 app.use('/api/tasks', taskRouter);
 
-app.get('/health', (_req, res) => {
-
-  res.send('Health check OK');
-});
+app.get('/health', (_req, res) => res.send('Health check OK'));
 
 AppDataSource.initialize()
   .then(() => {
