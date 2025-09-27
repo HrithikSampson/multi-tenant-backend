@@ -1,0 +1,47 @@
+{
+  "name": "multi-tenant-backend",
+  "version": "1.0.0",
+  "description": "Mult-tenant-task-Manager backend",
+  "main": "index.js",
+  "scripts": {
+    "type-check": "tsc --noEmit",
+    "start": "npm run type-check && ts-node src/index.ts",
+    "dev": "nodemon -e ts,tsx --exec \"sh -c 'npm run type-check && ts-node src/index.ts'\"",
+    "build": "tsc --noEmit",
+    "vercel-build": "npm run build",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "typeorm": "ts-node ./node_modules/typeorm/cli.js",
+    "migration:generate": "./scripts/generate-migration.sh",
+    "migration:run": "npm run typeorm -- migration:run -d src/data-source.ts",
+    "migration:revert": "npm run typeorm -- migration:revert -d src/data-source.ts"
+  },
+  "author": "Hrithik Sampson",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.3",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^24.5.2",
+    "@types/pg": "^8.15.5",
+    "dotenv": "^17.2.2",
+    "nodemon": "^3.1.10",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.2"
+  },
+  "dependencies": {
+    "@types/bcrypt": "^6.0.0",
+    "@types/cookie-parser": "^1.4.9",
+    "@types/morgan": "^1.9.10",
+    "bcrypt": "^6.0.0",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "morgan": "^1.10.1",
+    "pg": "^8.16.3",
+    "reflect-metadata": "^0.2.2",
+    "typeorm": "^0.3.27",
+    "winston": "^3.17.0",
+    "zod": "^4.1.11"
+  }
+}
