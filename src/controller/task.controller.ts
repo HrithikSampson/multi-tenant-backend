@@ -4,13 +4,19 @@ import { TaskStatus, ActivityKind } from '../db/enums';
 
 const router = express.Router();
 
-// Apply JWT middleware to all routes
-router.use(jwtMiddleware as any);
 
 // 1. Create task (OWNER/ADMIN/EDITOR only)
-router.post('/:projectId/tasks', setOrganizationContext as any, requireOrganization as any, async (req: any, res: Response) => {
+router.post('/', jwtMiddleware as any, setOrganizationContext as any, requireOrganization as any, async (req: any, res: Response) => {
   try {
-    const { projectId } = req.params;
+    // Extract projectId from the original URL since it's not in req.params
+    let projectId = req.params.projectId;
+    if (!projectId && req.originalUrl) {
+      const urlMatch = req.originalUrl.match(/\/projects\/([^\/]+)\/tasks/);
+      if (urlMatch) {
+        projectId = urlMatch[1];
+      }
+    }
+    
     const { title, description, assigneeId, dueDate, priority } = req.body;
     
     if (!title) {
@@ -48,7 +54,7 @@ router.post('/:projectId/tasks', setOrganizationContext as any, requireOrganizat
     // Validate assignee is a project member (if assigneeId provided)
     if (assigneeId) {
       const assigneeCheck = await executeWithRLS(req, `
-        SELECT id FROM project_members 
+        SELECT user_id FROM project_members 
         WHERE project_id = $1 AND user_id = $2
       `, [projectId, assigneeId]);
 
@@ -90,16 +96,34 @@ router.post('/:projectId/tasks', setOrganizationContext as any, requireOrganizat
 });
 
 // 2. List tasks in project
-router.get('/:projectId/tasks', setOrganizationContext as any, requireOrganization as any, async (req: any, res: Response) => {
+router.get('/', jwtMiddleware as any, setOrganizationContext as any, requireOrganization as any, async (req: any, res: Response) => {
   try {
-    const { projectId } = req.params;
+    // Extract projectId from the original URL since it's not in req.params
+    let projectId = req.params.projectId;
+    
+    // If not found in params, extract from original URL
+    if (!projectId && req.originalUrl) {
+      const urlMatch = req.originalUrl.match(/\/projects\/([^\/]+)\/tasks/);
+      if (urlMatch) {
+        projectId = urlMatch[1];
+      }
+    }
+    
     const { status } = req.query;
+    
+    console.log('Task controller debug:', { 
+      projectId, 
+      organizationId: req.organizationId,
+      originalUrl: req.originalUrl,
+      params: req.params 
+    });
     
     // Check if user has access to project
     const hasAccess = await hasProjectAccess(req, projectId);
     if (!hasAccess) {
+      console.log('Access denied to this project in task controller');
       return res.status(403).json({ 
-        message: 'Access denied to this project' 
+        message: 'Access denied to this project in task controller'+ hasAccess + " " + projectId +" " + req.organizationId 
       });
     }
 
@@ -140,9 +164,18 @@ router.get('/:projectId/tasks', setOrganizationContext as any, requireOrganizati
 });
 
 // 3. Update task (Assignee can change status, EDITOR/OWNER/ADMIN can change everything)
-router.put('/:projectId/tasks/:taskId', setOrganizationContext as any, requireOrganization as any, async (req: any, res: Response) => {
+router.put('/:taskId', jwtMiddleware as any, setOrganizationContext as any, requireOrganization as any, async (req: any, res: Response) => {
   try {
-    const { projectId, taskId } = req.params;
+    // Extract projectId from the original URL since it's not in req.params
+    let projectId = req.params.projectId;
+    if (!projectId && req.originalUrl) {
+      const urlMatch = req.originalUrl.match(/\/projects\/([^\/]+)\/tasks/);
+      if (urlMatch) {
+        projectId = urlMatch[1];
+      }
+    }
+    
+    const { taskId } = req.params;
     const { title, description, status, assigneeId, dueDate, priority, orderInBoard } = req.body;
     
     // Get task details
@@ -194,7 +227,7 @@ router.put('/:projectId/tasks/:taskId', setOrganizationContext as any, requireOr
     // Validate assignee is a project member (if assigneeId is being changed)
     if (assigneeId !== undefined && assigneeId !== null) {
       const assigneeCheck = await executeWithRLS(req, `
-        SELECT id FROM project_members 
+        SELECT user_id FROM project_members 
         WHERE project_id = $1 AND user_id = $2
       `, [projectId, assigneeId]);
 
@@ -283,9 +316,18 @@ router.put('/:projectId/tasks/:taskId', setOrganizationContext as any, requireOr
 });
 
 // 4. Delete task (EDITOR/OWNER/ADMIN only)
-router.delete('/:projectId/tasks/:taskId', setOrganizationContext as any, requireOrganization as any, async (req: any, res: Response) => {
+router.delete('/:taskId', jwtMiddleware as any, setOrganizationContext as any, requireOrganization as any, async (req: any, res: Response) => {
   try {
-    const { projectId, taskId } = req.params;
+    // Extract projectId from the original URL since it's not in req.params
+    let projectId = req.params.projectId;
+    if (!projectId && req.originalUrl) {
+      const urlMatch = req.originalUrl.match(/\/projects\/([^\/]+)\/tasks/);
+      if (urlMatch) {
+        projectId = urlMatch[1];
+      }
+    }
+    
+    const { taskId } = req.params;
     
     // Check if user has EDITOR access or is OWNER/ADMIN
     const userAccess = await executeWithRLS(req, `
@@ -351,9 +393,16 @@ router.delete('/:projectId/tasks/:taskId', setOrganizationContext as any, requir
 });
 
 // 5. Get task board (Kanban view)
-router.get('/:projectId/tasks/board', setOrganizationContext as any, requireOrganization as any, async (req: any, res: Response) => {
+router.get('/board', jwtMiddleware as any, setOrganizationContext as any, requireOrganization as any, async (req: any, res: Response) => {
   try {
-    const { projectId } = req.params;
+    // Extract projectId from the original URL since it's not in req.params
+    let projectId = req.params.projectId;
+    if (!projectId && req.originalUrl) {
+      const urlMatch = req.originalUrl.match(/\/projects\/([^\/]+)\/tasks/);
+      if (urlMatch) {
+        projectId = urlMatch[1];
+      }
+    }
     
     // Check if user has access to project
     const hasAccess = await hasProjectAccess(req, projectId);

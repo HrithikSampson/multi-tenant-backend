@@ -73,8 +73,9 @@ router.post('/register', async (req: Request, res: Response) => {
     const { accessToken, refreshToken } = generateTokens(user.id, user.username);
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
-      secure: true,
-      sameSite: 'strict'
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
     });
     logger.info(`User registered: ${username}`);
     
@@ -123,11 +124,20 @@ router.post('/login', async (req: Request, res: Response) => {
     await queryRunner.release();
     
     const {passwordHash, ...userWithoutPassword} = user;
+    
+    // Set refresh token as HTTP-only cookie
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000
+    });
+    
     res.json({
       message: 'Login successful',
       user: userWithoutPassword,
-      accessToken,
-      refreshToken
+      accessToken
+      // Don't send refreshToken in response body for security
     });
   } catch (error: any) {
     logger.error('Login error:', error);

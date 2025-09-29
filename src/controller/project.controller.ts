@@ -1,13 +1,9 @@
-import express, { Request, Response } from 'express';
+import express, { Response } from 'express';
 import { jwtMiddleware, setOrganizationContext, requireOrganization, executeWithRLS, hasProjectAccess } from '../utils/middleware/jwtMiddleWare';
-
 const router = express.Router();
 
-// Apply JWT middleware to all routes
-router.use(jwtMiddleware as any);
-
 // 1. Create project (OWNER/ADMIN only)
-router.post('/', setOrganizationContext as any, requireOrganization as any, async (req: any, res: Response) => {
+router.post('/', jwtMiddleware as any, setOrganizationContext as any, requireOrganization as any, async (req: any, res: Response) => {
   try {
     const { name, slug } = req.body;
     
@@ -69,12 +65,11 @@ router.post('/', setOrganizationContext as any, requireOrganization as any, asyn
 });
 
 // 2. List all projects in organization
-router.get('/', setOrganizationContext as any, requireOrganization as any, async (req: any, res: Response) => {
+router.get('/', jwtMiddleware as any, setOrganizationContext as any, requireOrganization as any, async (req: any, res: Response) => {
   try {
     console.log('Projects GET request:', { 
       userId: req.user?.userId, 
       organizationId: req.organizationId,
-      headers: req.headers['x-organization-id']
     });
     const projects = await executeWithRLS(req, `
       SELECT 
@@ -103,7 +98,7 @@ router.get('/', setOrganizationContext as any, requireOrganization as any, async
 });
 
 // 3. Get project details
-router.get('/:projectId', setOrganizationContext as any, requireOrganization as any, async (req: any, res: Response) => {
+router.get('/:projectId', jwtMiddleware as any, setOrganizationContext as any, requireOrganization as any, async (req: any, res: Response) => {
   try {
     const { projectId } = req.params;
     
@@ -146,7 +141,7 @@ router.get('/:projectId', setOrganizationContext as any, requireOrganization as 
 });
 
 // 4. Update project (EDITOR or OWNER/ADMIN)
-router.put('/:projectId', setOrganizationContext as any, requireOrganization as any, async (req: any, res: Response) => {
+router.put('/:projectId', jwtMiddleware as any, setOrganizationContext as any, requireOrganization as any, async (req: any, res: Response) => {
   try {
     const { projectId } = req.params;
     const { name, slug } = req.body;
@@ -233,7 +228,7 @@ router.put('/:projectId', setOrganizationContext as any, requireOrganization as 
 });
 
 // 5. Delete project (OWNER/ADMIN only)
-router.delete('/:projectId', setOrganizationContext as any, requireOrganization as any, async (req: any, res: Response) => {
+router.delete('/:projectId', jwtMiddleware as any, setOrganizationContext as any, requireOrganization as any, async (req: any, res: Response) => {
   try {
     const { projectId } = req.params;
     
@@ -279,7 +274,7 @@ router.delete('/:projectId', setOrganizationContext as any, requireOrganization 
 });
 
 // 6. Add member to project (OWNER/ADMIN only)
-router.post('/:projectId/members', setOrganizationContext as any, requireOrganization as any, async (req: any, res: Response) => {
+router.post('/:projectId/members', jwtMiddleware as any, setOrganizationContext as any, requireOrganization as any, async (req: any, res: Response) => {
   try {
     const { projectId } = req.params;
     const { userId, role = 'VIEWER' } = req.body;
@@ -304,7 +299,7 @@ router.post('/:projectId/members', setOrganizationContext as any, requireOrganiz
 
     // Check if user is a member of the organization
     const orgMember = await executeWithRLS(req, `
-      SELECT id FROM org_memberships 
+      SELECT user_id FROM org_memberships 
       WHERE organization_id = $1 AND user_id = $2
     `, [req.organizationId, userId]);
 
@@ -316,7 +311,7 @@ router.post('/:projectId/members', setOrganizationContext as any, requireOrganiz
 
     // Check if user is already a project member
     const existingMembership = await executeWithRLS(req, `
-      SELECT id FROM project_members 
+      SELECT user_id FROM project_members 
       WHERE project_id = $1 AND user_id = $2
     `, [projectId, userId]);
 
@@ -348,7 +343,7 @@ router.post('/:projectId/members', setOrganizationContext as any, requireOrganiz
 });
 
 // 7. List project members
-router.get('/:projectId/members', setOrganizationContext as any, requireOrganization as any, async (req: any, res: Response) => {
+router.get('/:projectId/members', jwtMiddleware as any, setOrganizationContext as any, requireOrganization as any, async (req: any, res: Response) => {
   try {
     const { projectId } = req.params;
     
@@ -386,7 +381,7 @@ router.get('/:projectId/members', setOrganizationContext as any, requireOrganiza
 });
 
 // 8. Update project member role (OWNER/ADMIN only)
-router.put('/:projectId/members/:userId', setOrganizationContext as any, requireOrganization as any, async (req: any, res: Response) => {
+router.put('/:projectId/members/:userId', jwtMiddleware as any, setOrganizationContext as any, requireOrganization as any, async (req: any, res: Response) => {
   try {
     const { projectId, userId } = req.params;
     const { role } = req.body;
@@ -432,7 +427,7 @@ router.put('/:projectId/members/:userId', setOrganizationContext as any, require
 });
 
 // 9. Remove project member (OWNER/ADMIN only)
-router.delete('/:projectId/members/:userId', setOrganizationContext as any, requireOrganization as any, async (req: any, res: Response) => {
+router.delete('/:projectId/members/:userId', jwtMiddleware as any, setOrganizationContext as any, requireOrganization as any, async (req: any, res: Response) => {
   try {
     const { projectId, userId } = req.params;
     

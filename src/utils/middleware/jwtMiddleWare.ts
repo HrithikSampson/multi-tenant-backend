@@ -171,8 +171,25 @@ export const switchOrganization = async (req: AuthenticatedRequest, organization
 };
 
 export const setOrganizationContext = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-  const organizationId = req.headers['x-organization-id'] as string || req.body.organizationId;
-  console.log('setOrganizationContext:', { organizationId, hasQueryRunner: !!req.queryRunner });
+  // Extract organizationId from URL path, query params, or body
+  let organizationId = req.params?.organizationId || req.query?.organizationId as string || req.body?.organizationId;
+  
+  // If not found in params, try to extract from the original URL
+  if (!organizationId && req.originalUrl) {
+    const urlMatch = req.originalUrl.match(/\/organizations\/([^\/]+)/);
+    if (urlMatch) {
+      organizationId = urlMatch[1];
+    }
+  }
+  
+  console.log('setOrganizationContext:', { 
+    organizationId, 
+    hasQueryRunner: !!req.queryRunner,
+    params: req.params,
+    query: req.query,
+    url: req.url,
+    originalUrl: req.originalUrl
+  });
   
   if (organizationId && req.queryRunner) {
     try {
@@ -192,7 +209,7 @@ export const requireOrganization = async (req: AuthenticatedRequest, res: Respon
   console.log('requireOrganization:', { organizationId: req.organizationId });
   if (!req.organizationId) {
     return res.status(400).json({ 
-      message: 'Organization context required. Please provide x-organization-id header or organizationId in body.' 
+      message: 'Organization context required. Please provide organizationId in URL path, query params, or body.' 
     });
   }
   
@@ -234,6 +251,11 @@ export const hasOrgAccess = async (req: AuthenticatedRequest, organizationId: st
 
 export const hasProjectAccess = async (req: AuthenticatedRequest, projectId: string): Promise<boolean> => {
   if (!req.user || !req.queryRunner || !req.organizationId) {
+    console.log('hasProjectAccess: Missing context', { 
+      hasUser: !!req.user, 
+      hasQueryRunner: !!req.queryRunner, 
+      organizationId: req.organizationId 
+    });
     return false;
   }
   
@@ -248,8 +270,19 @@ export const hasProjectAccess = async (req: AuthenticatedRequest, projectId: str
       ) as has_access
     `, [req.user.userId, projectId, req.organizationId]);
     
+    console.log('hasProjectAccess result:', { 
+      userId: req.user.userId, 
+      userIdType: typeof req.user.userId,
+      projectId, 
+      projectIdType: typeof projectId,
+      organizationId: req.organizationId, 
+      organizationIdType: typeof req.organizationId,
+      hasAccess: result[0]?.has_access 
+    });
+    
     return result[0]?.has_access || false;
   } catch (error) {
+    console.error('hasProjectAccess error:', error);
     return false;
   }
 };
