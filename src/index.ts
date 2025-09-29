@@ -9,9 +9,10 @@ import authRouter from './controller/auth.controller';
 import organizationRouter from './controller/organization.controller';
 import projectRouter from './controller/project.controller';
 import taskRouter from './controller/task.controller';
+import cookieParser from 'cookie-parser';
 
 const app = express();
-
+app.use(cookieParser());
 morgan.token('date', () => new Date().toISOString());
 
 const whitelistHostnames = [
