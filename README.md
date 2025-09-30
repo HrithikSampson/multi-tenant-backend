@@ -509,43 +509,7 @@ activities
 **Optional:**
 - `NODE_ENV` - Environment (development/production)
 
-## Deployment
 
-**Railway (recommended):**
-
-1. Create a `railway.toml`:
-   ```toml
-   [build]
-   builder = "nixpacks"
-   
-   [deploy]
-   numReplicas = 1
-   startCommand = "npm start"
-   healthcheckPath = "/health"
-   healthcheckTimeout = 100
-   restartPolicyType = "on_failure"
-   
-   [[deploy.environmentVariables]]
-   name = "NODE_ENV"
-   value = "production"
-   
-   [[deploy.environmentVariables]]
-   name = "NODE_OPTIONS"
-   value = "--max-old-space-size=1024"
-   ```
-
-2. Push to GitHub
-3. Connect to Railway
-4. Add environment variables
-5. Deploy
-
-**Docker:**
-```sh
-docker build -t multi-tenant-backend .
-docker run -p 4000:4000 --env-file .env multi-tenant-backend
-```
-
-**Note:** TypeScript compilation requires ~1GB RAM. If deploying to memory-constrained environments, compile locally and deploy the built JavaScript.
 
 ## Scripts
 
