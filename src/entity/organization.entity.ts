@@ -14,7 +14,8 @@ export class Organization {
   @Column({ type: 'citext', name: 'subdomain' })
   subdomain!: string;
 
-  @Column({ type: 'uuid', name: 'room_key' })
+  @Index({ unique: true })
+  @Column({ type: 'varchar', length: 120, name: 'room_key' })
   roomKey!: string;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })

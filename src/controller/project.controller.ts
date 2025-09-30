@@ -1,5 +1,6 @@
 import express, { Response } from 'express';
 import { jwtMiddleware, setOrganizationContext, requireOrganization, executeWithRLS, hasProjectAccess } from '../utils/middleware/jwtMiddleWare';
+import { ActivityService } from '../services/activity.service';
 const router = express.Router();
 
 // 1. Create project (OWNER/ADMIN only)
@@ -50,6 +51,15 @@ router.post('/', jwtMiddleware as any, setOrganizationContext as any, requireOrg
       INSERT INTO project_members (organization_id, project_id, user_id, role)
       VALUES ($1, $2, $3, 'EDITOR')
     `, [req.organizationId, project.id, req.user!.userId]);
+
+    // Log activity
+    await ActivityService.logProjectActivity(
+      req.organizationId,
+      req.user!.userId,
+      'created',
+      name,
+      project.id
+    );
 
     res.status(201).json({
       project,
@@ -254,6 +264,15 @@ router.delete('/:projectId', jwtMiddleware as any, setOrganizationContext as any
         message: 'Project not found' 
       });
     }
+
+    // Log activity before deletion
+    await ActivityService.logProjectActivity(
+      req.organizationId,
+      req.user!.userId,
+      'deleted',
+      project[0].name,
+      projectId
+    );
 
     // Delete project (cascade will handle project_members and tasks)
     await executeWithRLS(req, `

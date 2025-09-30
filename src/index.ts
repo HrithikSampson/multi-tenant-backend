@@ -5,11 +5,15 @@ dotenv.config();
 import express from 'express';
 import cors, { CorsOptions } from 'cors';
 import morgan from 'morgan';
+import { createServer } from 'http';
 import authRouter from './controller/auth.controller';
 import organizationRouter from './controller/organization.controller';
 import projectRouter from './controller/project.controller';
 import taskRouter from './controller/task.controller';
+import activityRouter from './controller/activity.controller';
 import cookieParser from 'cookie-parser';
+import { initializeWebSocket } from './services/websocket.service';
+import { getRedisActivityService } from './services/redis-activity.service';
 
 const app = express();
 app.use(cookieParser());
@@ -20,9 +24,22 @@ const whitelistHostnames = [
   'localhost',
 ];
 
+const whitelistOrigins = [
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'https://multi-tenant-frontend-opal.vercel.app',
+];
+
 const corsOptions: CorsOptions = {
   origin(origin, cb) {
     if (!origin) return cb(null, true);
+    
+    // Check exact origins first
+    if (whitelistOrigins.includes(origin)) {
+      return cb(null, true);
+    }
+    
+    // Fallback to hostname check
     let hostname: string;
     try { hostname = new URL(origin).hostname; } catch { return cb(new Error('Invalid Origin')); }
     const allowed = whitelistHostnames.some(h => hostname === h || hostname.endsWith(`.${h}`));
@@ -44,14 +61,27 @@ app.use('/api/auth', authRouter);
 app.use('/api/organizations', organizationRouter);
 app.use('/api/organizations/:organizationId/projects/:projectId/tasks', taskRouter);
 app.use('/api/organizations/:organizationId/projects', projectRouter);
+app.use('/api/organizations/:organizationId/activities', activityRouter);
 
 
 app.get('/health', (_req, res) => res.send('Health check OK'));
 
 const PORT = parseInt(process.env.PORT || '4000', 10);
 
-app.listen(PORT, () => {
+// Create HTTP server
+const httpServer = createServer(app);
+
+// Initialize WebSocket service
+const webSocketService = initializeWebSocket(httpServer);
+
+// Initialize Redis service
+const redisActivityService = getRedisActivityService();
+redisActivityService.connect().catch(console.error);
+
+httpServer.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
+  console.log(`WebSocket service initialized`);
+  console.log(`Redis activity service initialized`);
 });
 
 export default app;

@@ -1,5 +1,6 @@
 import express, { Request, Response } from 'express';
 import { jwtMiddleware, setOrganizationContext, requireOrganization, executeWithRLS, getUserOrganizations, switchOrganization } from '../utils/middleware/jwtMiddleWare';
+import { ActivityService } from '../services/activity.service';
 
 interface AuthenticatedRequest extends Request {
   user?: {
@@ -35,10 +36,14 @@ router.post('/', async (req: any, res: Response) => {
       });
     }
 
+    console.log('Organization creation: Checking for existing subdomain:', subdomain);
+    
     // Check if subdomain is already taken (without RLS since we're creating)
     const existingOrg = await req.queryRunner.query(`
       SELECT id FROM organizations WHERE subdomain = $1
     `, [subdomain]);
+
+    console.log('Organization creation: Existing org check result:', existingOrg);
 
     if (existingOrg.length > 0) {
       return res.status(409).json({ 
@@ -46,20 +51,27 @@ router.post('/', async (req: any, res: Response) => {
       });
     }
 
+    console.log('Organization creation: Creating organization with:', { name, subdomain });
+    
     // Create organization (without RLS since we're creating)
     const result = await req.queryRunner.query(`
-      INSERT INTO organizations (name, subdomain)
-      VALUES ($1, $2)
-      RETURNING id, name, subdomain, created_at
-    `, [name, subdomain]);
+      INSERT INTO organizations (name, subdomain, room_key)
+      VALUES ($1, $2, $3)
+      RETURNING id, name, subdomain, room_key, created_at
+    `, [name, subdomain, subdomain]);
 
+    console.log('Organization creation: Insert result:', result);
     const organization = result[0];
 
+    console.log('Organization creation: Adding user as owner:', { organizationId: organization.id, userId: req.user!.userId });
+    
     // Add user as owner of the organization (without RLS since we're creating)
     await req.queryRunner.query(`
       INSERT INTO org_memberships (organization_id, user_id, role)
       VALUES ($1, $2, 'OWNER')
     `, [organization.id, req.user!.userId]);
+    
+    console.log('Organization creation: User added as owner successfully');
 
     res.status(201).json({
       organization,
@@ -68,8 +80,15 @@ router.post('/', async (req: any, res: Response) => {
 
   } catch (error: any) {
     console.error('Error creating organization:', error);
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      code: error.code,
+      constraint: error.constraint
+    });
     res.status(500).json({ 
-      message: 'Failed to create organization' 
+      message: 'Failed to create organization',
+      error: error.message 
     });
   }
 });
@@ -199,6 +218,21 @@ router.post('/:organizationId/members', setOrganizationContext as any, requireOr
       VALUES ($1, $2, $3)
     `, [organizationId, userId, role]);
 
+    // Get user details for activity log
+    const userDetails = await executeWithRLS(req, `
+      SELECT username FROM users WHERE id = $1
+    `, [userId]);
+
+    // Log activity
+    await ActivityService.logMemberActivity(
+      organizationId,
+      req.user!.userId,
+      'added',
+      userDetails[0].username,
+      userId,
+      role
+    );
+
     res.status(201).json({
       message: 'Member added successfully',
       organizationId,
@@ -308,12 +342,36 @@ router.put('/:organizationId/members/:userId', setOrganizationContext as any, re
       }
     }
 
+    // Get current role and user details for activity log
+    const [currentRole, userDetails] = await Promise.all([
+      executeWithRLS(req, `
+        SELECT role FROM org_memberships 
+        WHERE organization_id = $1 AND user_id = $2
+      `, [organizationId, userId]),
+      executeWithRLS(req, `
+        SELECT username FROM users WHERE id = $1
+      `, [userId])
+    ]);
+
+    const oldRole = currentRole[0]?.role || 'USER';
+
     // Update member role
     await executeWithRLS(req, `
       UPDATE org_memberships 
       SET role = $1, updated_at = now()
       WHERE organization_id = $2 AND user_id = $3
     `, [role, organizationId, userId]);
+
+    // Log activity
+    await ActivityService.logMemberActivity(
+      organizationId,
+      req.user!.userId,
+      'role_changed',
+      userDetails[0].username,
+      userId,
+      role,
+      oldRole
+    );
 
     res.json({
       message: 'Member role updated successfully',
@@ -373,11 +431,25 @@ router.delete('/:organizationId/members/:userId', setOrganizationContext as any,
       });
     }
 
+    // Get user details for activity log before removal
+    const userDetails = await executeWithRLS(req, `
+      SELECT username FROM users WHERE id = $1
+    `, [userId]);
+
     // Remove member
     await executeWithRLS(req, `
       DELETE FROM org_memberships 
       WHERE organization_id = $1 AND user_id = $2
     `, [organizationId, userId]);
+
+    // Log activity
+    await ActivityService.logMemberActivity(
+      organizationId,
+      req.user!.userId,
+      'removed',
+      userDetails[0].username,
+      userId
+    );
 
     res.json({
       message: 'Member removed successfully',

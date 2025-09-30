@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import { jwtMiddleware, setOrganizationContext, requireOrganization, executeWithRLS, hasProjectAccess } from '../utils/middleware/jwtMiddleWare';
 import { TaskStatus, ActivityKind } from '../db/enums';
+import { ActivityService } from '../services/activity.service';
 
 const router = express.Router();
 
@@ -76,11 +77,24 @@ router.post('/', jwtMiddleware as any, setOrganizationContext as any, requireOrg
 
     const task = result[0];
 
-    // Create activity log
-    await executeWithRLS(req, `
-      INSERT INTO activities (organization_id, actor_id, kind, message, object_type, object_id)
-      VALUES ($1, $2, 'NOTIFY', $3, 'task', $4)
-    `, [req.organizationId, req.user!.userId, `${req.user!.username} created task "${title}"`, task.id]);
+    // Get project name for activity log
+    const projectResult = await executeWithRLS(req, `
+      SELECT name FROM projects WHERE id = $1
+    `, [projectId]);
+    
+    const projectName = projectResult[0]?.name || 'Unknown Project';
+    
+    // Log activity
+    console.log('TaskController: Logging task creation activity');
+    await ActivityService.logTaskActivity(
+      req.organizationId,
+      req.user!.userId,
+      'created',
+      title,
+      task.id,
+      projectName
+    );
+    console.log('TaskController: Task creation activity logged');
 
     res.status(201).json({
       task,
@@ -289,18 +303,35 @@ router.put('/:taskId', jwtMiddleware as any, setOrganizationContext as any, requ
       RETURNING id, title, description, status, assignee_id, due_date, priority, order_in_board, updated_at
     `, updateValues);
 
-    // Create activity log
-    let activityMessage = '';
+    // Get project name for activity log
+    const projectResult = await executeWithRLS(req, `
+      SELECT name FROM projects WHERE id = $1
+    `, [projectId]);
+    
+    const projectName = projectResult[0]?.name || 'Unknown Project';
+    
+    // Log activity with proper status change detection
     if (status !== undefined && status !== currentTask.status) {
-      activityMessage = `${req.user!.username} updated task "${currentTask.title}" to ${status}`;
+      await ActivityService.logTaskActivity(
+        req.organizationId,
+        req.user!.userId,
+        'status_changed',
+        currentTask.title,
+        taskId,
+        projectName,
+        currentTask.status,
+        status
+      );
     } else {
-      activityMessage = `${req.user!.username} updated task "${currentTask.title}"`;
+      await ActivityService.logTaskActivity(
+        req.organizationId,
+        req.user!.userId,
+        'updated',
+        currentTask.title,
+        taskId,
+        projectName
+      );
     }
-
-    await executeWithRLS(req, `
-      INSERT INTO activities (organization_id, actor_id, kind, message, object_type, object_id)
-      VALUES ($1, $2, 'NOTIFY', $3, 'task', $4)
-    `, [req.organizationId, req.user!.userId, activityMessage, taskId]);
 
     res.json({
       task: result[0],
@@ -373,11 +404,22 @@ router.delete('/:taskId', jwtMiddleware as any, setOrganizationContext as any, r
       WHERE id = $1 AND project_id = $2 AND organization_id = $3
     `, [taskId, projectId, req.organizationId]);
 
-    // Create activity log
-    await executeWithRLS(req, `
-      INSERT INTO activities (organization_id, actor_id, kind, message, object_type, object_id)
-      VALUES ($1, $2, 'NOTIFY', $3, 'task', $4)
-    `, [req.organizationId, req.user!.userId, `${req.user!.username} deleted task "${task[0].title}"`, taskId]);
+    // Get project name for activity log
+    const projectResult = await executeWithRLS(req, `
+      SELECT name FROM projects WHERE id = $1
+    `, [projectId]);
+    
+    const projectName = projectResult[0]?.name || 'Unknown Project';
+    
+    // Log activity
+    await ActivityService.logTaskActivity(
+      req.organizationId,
+      req.user!.userId,
+      'deleted',
+      task[0].title,
+      taskId,
+      projectName
+    );
 
     res.json({
       message: 'Task deleted successfully',
