@@ -2,44 +2,55 @@ import { Router, Request, Response } from 'express';
 import { getInitializedDataSource } from '../config/database';
 import { Activity } from '../entity/activity.entity';
 import { Organization } from '../entity/organization.entity';
-import { User } from '../entity/user.entity';
 import { jwtMiddleware, setOrganizationContext, requireOrganization } from '../utils/middleware/jwtMiddleWare';
 import { ActivityKind } from '../db/enums';
-import { getRedisActivityService } from '../services/redis-activity.service';
 
 const router = Router();
 
 // Get activity feed for an organization
 router.get('/', jwtMiddleware as any, setOrganizationContext as any, requireOrganization as any, async (req: any, res: Response) => {
   try {
-    const { organizationId } = req.params;
-    const { page = 1, limit = 20, kind, roomKey } = req.query;
+    const organizationId = req.organizationId || req.params.organizationId;
+    const { page = 1, limit = 20, kind } = req.query;
     
     const AppDataSource = await getInitializedDataSource();
     const organizationRepository = AppDataSource.getRepository(Organization);
     
-    // Get organization details
-    const organization = await organizationRepository.findOne({
-      where: { id: organizationId }
-    });
-    
-    if (!organization) {
-      return res.status(404).json({ message: 'Organization not found' });
-    }
-    
-    // Use roomKey if provided, otherwise use organization's roomKey
-    const targetRoomKey = roomKey || organization.roomKey;
-    
-    // Get activities from Redis
-    console.log('ActivityController: Getting activities for roomKey:', targetRoomKey);
-    const redisActivityService = getRedisActivityService();
-    const { activities, total } = await redisActivityService.getActivities(
-      targetRoomKey, 
-      Number(page), 
-      Number(limit), 
-      kind as string
-    );
-    console.log('ActivityController: Retrieved activities:', activities.length, 'total:', total);
+      // Get organization details
+      const organization = await organizationRepository.findOne({
+        where: { id: organizationId }
+      });
+      
+      if (!organization) {
+        return res.status(404).json({ message: 'Organization not found' });
+      }
+      
+      // Get activities from PostgreSQL
+      console.log('ActivityController: Getting activities for organizationId:', organizationId);
+      const activityRepository = AppDataSource.getRepository(Activity);
+      
+      // Build query
+      const queryBuilder = activityRepository
+        .createQueryBuilder('activity')
+        .leftJoinAndSelect('activity.actor', 'actor')
+        .where('activity.organizationId = :organizationId', { organizationId })
+        .orderBy('activity.createdAt', 'DESC');
+      
+      // Add kind filter if provided
+      if (kind) {
+        queryBuilder.andWhere('activity.kind = :kind', { kind });
+      }
+      
+      // Get total count
+      const total = await queryBuilder.getCount();
+      
+      // Add pagination
+      const activities = await queryBuilder
+        .skip((Number(page) - 1) * Number(limit))
+        .take(Number(limit))
+        .getMany();
+      
+      console.log('ActivityController: Retrieved activities:', activities.length, 'total:', total);
     
     res.json({
       activities,
@@ -64,7 +75,7 @@ router.get('/', jwtMiddleware as any, setOrganizationContext as any, requireOrga
 // Create a new activity
 router.post('/', jwtMiddleware as any, setOrganizationContext as any, requireOrganization as any, async (req: any, res: Response) => {
   try {
-    const { organizationId } = req.params;
+    const organizationId = req.organizationId || req.params.organizationId;
     const { kind, message, objectType, objectId, meta = {} } = req.body;
     
     if (!kind || !message) {

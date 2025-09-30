@@ -13,7 +13,6 @@ import taskRouter from './controller/task.controller';
 import activityRouter from './controller/activity.controller';
 import cookieParser from 'cookie-parser';
 import { initializeWebSocket } from './services/websocket.service';
-import { getRedisActivityService } from './services/redis-activity.service';
 
 const app = express();
 app.use(cookieParser());
@@ -74,14 +73,10 @@ const httpServer = createServer(app);
 // Initialize WebSocket service
 const webSocketService = initializeWebSocket(httpServer);
 
-// Initialize Redis service
-const redisActivityService = getRedisActivityService();
-redisActivityService.connect().catch(console.error);
 
 httpServer.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
   console.log(`WebSocket service initialized`);
-  console.log(`Redis activity service initialized`);
 });
 
 export default app;

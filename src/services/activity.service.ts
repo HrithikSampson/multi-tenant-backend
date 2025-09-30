@@ -2,7 +2,6 @@ import { getInitializedDataSource } from '../config/database';
 import { Activity } from '../entity/activity.entity';
 import { ActivityKind } from '../db/enums';
 import { getWebSocketService } from './websocket.service';
-import { getRedisActivityService } from './redis-activity.service';
 
 export class ActivityService {
   static async logActivity(
@@ -29,39 +28,33 @@ export class ActivityService {
     const roomKey = organization[0].room_key;
     const actorData = actor[0];
     
-    // Create activity object
-    const activity: Activity = {
-      id: Date.now().toString(), // Simple ID for Redis
+    // Create and save activity in PostgreSQL
+    console.log('ActivityService: Storing activity in PostgreSQL for organizationId:', organizationId);
+    const activityRepository = AppDataSource.getRepository(Activity);
+    
+    const activity = activityRepository.create({
       organizationId,
       actorId,
       kind,
       message,
       objectType,
       objectId,
-      meta,
-      createdAt: new Date(),
-      actor: {
-        id: actorData.id,
-        username: actorData.username
-      }
-    } as Activity;
+      meta
+    });
     
-    // Store in Redis
-    console.log('ActivityService: Storing activity in Redis for roomKey:', roomKey);
-    const redisActivityService = getRedisActivityService();
-    await redisActivityService.storeActivity(roomKey, activity);
-    console.log('ActivityService: Activity stored successfully');
+    const savedActivity = await activityRepository.save(activity);
+    console.log('ActivityService: Activity stored successfully in PostgreSQL');
     
     // Broadcast via WebSocket
     const webSocketService = getWebSocketService();
     if (webSocketService) {
       console.log('ActivityService: Broadcasting activity via WebSocket');
-      webSocketService.broadcastActivity(roomKey, activity);
+      webSocketService.broadcastActivity(roomKey, savedActivity);
     } else {
       console.log('ActivityService: WebSocket service not available');
     }
     
-    return activity;
+    return savedActivity;
   }
   
   static async logProjectActivity(
